@@ -6,8 +6,8 @@
 
 {application, couchbeam,
  [{description, "Erlang CouchDB client"},
-  {vsn, "1.4.2.1"},
-  {modules, []},
+  {vsn, "%VSN%"},
+  {modules, [%MODULES%]},
   {registered, [
     couchbeam_sup
   ]},
