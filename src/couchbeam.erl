@@ -17,6 +17,7 @@
          get_uuid/1, get_uuids/2,
          replicate/2, replicate/3, replicate/4,
          all_dbs/1, all_dbs/2, db_exists/2,
+         find/2,
          create_db/2, create_db/3, create_db/4,
          open_db/2, open_db/3,
          open_or_create_db/2, open_or_create_db/3, open_or_create_db/4,
@@ -262,6 +263,22 @@ view_cleanup(#db{server=Server, name=DbName, options=Opts}) ->
         {ok, _, _, Ref} ->
             catch hackney:skip_body(Ref),
             ok;
+        Error ->
+            Error
+    end.
+
+%% @doc Find documents using a declarative JSON querying syntax
+%% @spec find(Db::db(), Docs::list()) -> {ok, Result}|{error, Error}
+find(#db{server=Server, name=DbName, options=Opts}, Body) ->
+    Url = hackney_url:make_url(couchbeam_httpc:server_url(Server),
+                               [DbName, <<"_find">>],
+                               []),
+    Headers = [{<<"Content-Type">>, <<"application/json">>}],
+    Resp = couchbeam_httpc:db_request(post, Url, Headers, Body, Opts, [200]),
+    case Resp of
+        {ok, _, _, Ref} ->
+            Dbs = couchbeam_httpc:json_body(Ref),
+            {ok, Dbs};
         Error ->
             Error
     end.
@@ -600,19 +617,29 @@ delete_docs(Db, Docs) ->
 delete_docs(Db, Docs, Options) ->
     Empty = couchbeam_util:get_value("empty_on_delete", Options, false),
 
-    {FinalDocs, FinalOptions} = case Empty of
-        true ->
-            Docs1 = lists:map(fun(Doc)->
-                        {[{<<"_id">>, couchbeam_doc:get_id(Doc)},
-                         {<<"_rev">>, couchbeam_doc:get_rev(Doc)},
-                         {<<"_deleted">>, true}]}
-                 end, Docs),
-             {Docs1, proplists:delete("all_or_nothing", Options)};
-         _ ->
-            Docs1 = lists:map(fun({DocProps})->
-                        {[{<<"_deleted">>, true}|DocProps]}
-                end, Docs),
-            {Docs1, Options}
+    {FinalDocs, FinalOptions} = 
+        case Empty of
+            true ->
+                Docs1 = lists:map(
+                          fun
+                              (Doc) when is_map(Doc) ->
+                                  {[{<<"_id">>, maps:get(<<"_id">>, Doc)},
+                                    {<<"_rev">>, maps:get(<<"_rev">>, Doc)},
+                                    {<<"_deleted">>, true}]};
+                              (Doc)->
+                                  {[{<<"_id">>, couchbeam_doc:get_id(Doc)},
+                                    {<<"_rev">>, couchbeam_doc:get_rev(Doc)},
+                                    {<<"_deleted">>, true}]}
+                          end, Docs),
+                {Docs1, proplists:delete("all_or_nothing", Options)};
+            _ ->
+                Docs1 = lists:map(fun
+                                      (Doc) when is_map(Doc) ->
+                                          Doc#{ <<"_deleted">> => true };
+                                      ({DocProps})->
+                                          {[{<<"_deleted">>, true}|DocProps]}
+                                  end, Docs),
+                {Docs1, Options}
     end,
     save_docs(Db, FinalDocs, FinalOptions).
 
@@ -1010,6 +1037,14 @@ get_missing_revs(#db{server=Server, options=Opts}=Db, IdRevs) ->
 %% --------------------------------------------------------------------
 
 %% add missing docid to a list of documents if needed
+maybe_docid(Server, Doc) when is_map(Doc) ->
+    case maps:get(<<"_id">>, Doc, undefined) of
+        undefined ->
+            [DocId] = get_uuid(Server),
+            Doc#{<<"_id">> => DocId};
+        _ ->
+            Doc
+    end;
 maybe_docid(Server, {DocProps}) ->
     case couchbeam_util:get_value(<<"_id">>, DocProps) of
         undefined ->
