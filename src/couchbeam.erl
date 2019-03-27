@@ -18,6 +18,7 @@
          replicate/2, replicate/3, replicate/4,
          all_dbs/1, all_dbs/2, db_exists/2,
          find/2,
+         index/1,
          create_db/2, create_db/3, create_db/4,
          open_db/2, open_db/3,
          open_or_create_db/2, open_or_create_db/3, open_or_create_db/4,
@@ -275,6 +276,23 @@ find(#db{server=Server, name=DbName, options=Opts}, Body) ->
                                []),
     Headers = [{<<"Content-Type">>, <<"application/json">>}],
     Resp = couchbeam_httpc:db_request(post, Url, Headers, Body, Opts, [200]),
+    case Resp of
+        {ok, _, _, Ref} ->
+            Dbs = couchbeam_httpc:json_body(Ref),
+            {ok, Dbs};
+        Error ->
+            Error
+    end.
+
+%% @doc Get list of all indexes in the database
+%% @spec find(Db::db()) -> {ok, Result}|{error, Error}
+index(#db{server=Server, name=DbName, options=Opts}) ->
+    Url = hackney_url:make_url(couchbeam_httpc:server_url(Server),
+                               [DbName, <<"_index">>],
+                               []),
+
+    Resp = couchbeam_httpc:db_request(get, Url, [], <<>>, Opts, [200]),
+
     case Resp of
         {ok, _, _, Ref} ->
             Dbs = couchbeam_httpc:json_body(Ref),
