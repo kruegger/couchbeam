@@ -19,6 +19,7 @@
          all_dbs/1, all_dbs/2, db_exists/2,
          find/2,
          index/1,
+         create_index/2, delete_index/3,
          create_db/2, create_db/3, create_db/4,
          open_db/2, open_db/3,
          open_or_create_db/2, open_or_create_db/3, open_or_create_db/4,
@@ -269,7 +270,7 @@ view_cleanup(#db{server=Server, name=DbName, options=Opts}) ->
     end.
 
 %% @doc Find documents using a declarative JSON querying syntax
-%% @spec find(Db::db(), Docs::list()) -> {ok, Result}|{error, Error}
+%% @spec find(Db::db(), Body::binary()) -> {ok, Result}|{error, Error}
 find(#db{server=Server, name=DbName, options=Opts}, Body) ->
     Url = hackney_url:make_url(couchbeam_httpc:server_url(Server),
                                [DbName, <<"_find">>],
@@ -297,6 +298,37 @@ index(#db{server=Server, name=DbName, options=Opts}) ->
         {ok, _, _, Ref} ->
             Dbs = couchbeam_httpc:json_body(Ref),
             {ok, Dbs};
+        Error ->
+            Error
+    end.
+
+%% @doc Create new index on a database
+%% @spec find(Db::db(), Body::binary()) -> {ok, Result}|{error, Error}
+create_index(#db{server=Server, name=DbName, options=Opts}, Body) ->
+    Url = hackney_url:make_url(couchbeam_httpc:server_url(Server),
+                               [DbName, <<"_index">>],
+                               []),
+
+    Headers = [{<<"Content-Type">>, <<"application/json">>}],
+    Resp = couchbeam_httpc:db_request(post, Url, Headers, Body, Opts, [200]),
+
+    case Resp of
+        {ok, _, _, Ref} ->
+            Dbs = couchbeam_httpc:json_body(Ref),
+            {ok, Dbs};
+        Error ->
+            Error
+    end.
+
+%% @doc Delete index on a database
+%% @spec delete_index(Db::db(), DesignDoc::string(), Name::string()) -> {ok, Result)|{error, Error}}
+delete_index(#db{server=Server, name=DbName, options=Opts}, DesignDoc, Name) ->
+    Url = hackney_url:make_url(couchbeam_httpc:server_url(Server),
+                               [DbName, <<"_index">>, list_to_binary(DesignDoc), <<"json">>, list_to_binary(Name)], []),
+    Resp = couchbeam_httpc:request(delete, Url, [], <<>>, Opts),
+    case couchbeam_httpc:db_resp(Resp, [200]) of
+        {ok, _, _, Ref} ->
+            {ok, couchbeam_httpc:json_body(Ref)};
         Error ->
             Error
     end.
