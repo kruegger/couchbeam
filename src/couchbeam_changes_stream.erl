@@ -132,6 +132,12 @@ do_init_stream(#state{mref=MRef,
             Headers = [{<<"Content-Type">>, <<"application/json">>}],
             couchbeam_httpc:request(post, Url, Headers, Body, ConnOpts1)
     end,
+
+    Timeout = case {FeedType, proplists:get_value(since, Options, 0)} of
+                  {continuous, now} -> infinity;
+                  _ -> ?TIMEOUT
+              end,
+
     receive
         {'DOWN', MRef, _, _, _} ->
             %% parent exited there is no need to continue
@@ -147,7 +153,7 @@ do_init_stream(#state{mref=MRef,
             {ok, State1#state{decoder=DecoderFun}};
         {hackney_response, ClientRef, {error, Reason}} ->
             exit(Reason)
-    after ?TIMEOUT ->
+    after Timeout ->
            exit(timeout)
     end.
 
