@@ -1037,14 +1037,6 @@ get_missing_revs(#db{server=Server, options=Opts}=Db, IdRevs) ->
 %% --------------------------------------------------------------------
 
 %% add missing docid to a list of documents if needed
-maybe_docid(Server, Doc) when is_map(Doc) ->
-    case maps:get(<<"_id">>, Doc, undefined) of
-        undefined ->
-            [DocId] = get_uuid(Server),
-            Doc#{<<"_id">> => DocId};
-        _ ->
-            Doc
-    end;
 maybe_docid(Server, {DocProps}) ->
     case couchbeam_util:get_value(<<"_id">>, DocProps) of
         undefined ->
