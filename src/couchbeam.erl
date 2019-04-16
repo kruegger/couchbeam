@@ -617,30 +617,21 @@ delete_docs(Db, Docs) ->
 delete_docs(Db, Docs, Options) ->
     Empty = couchbeam_util:get_value("empty_on_delete", Options, false),
 
-    {FinalDocs, FinalOptions} = 
-        case Empty of
-            true ->
-                Docs1 = lists:map(
-                          fun
-                              (Doc) when is_map(Doc) ->
-                                  {[{<<"_id">>, maps:get(<<"_id">>, Doc)},
-                                    {<<"_rev">>, maps:get(<<"_rev">>, Doc)},
-                                    {<<"_deleted">>, true}]};
-                              (Doc)->
-                                  {[{<<"_id">>, couchbeam_doc:get_id(Doc)},
-                                    {<<"_rev">>, couchbeam_doc:get_rev(Doc)},
-                                    {<<"_deleted">>, true}]}
-                          end, Docs),
-                {Docs1, proplists:delete("all_or_nothing", Options)};
-            _ ->
-                Docs1 = lists:map(fun
-                                      (Doc) when is_map(Doc) ->
-                                          Doc#{ <<"_deleted">> => true };
-                                      ({DocProps})->
-                                          {[{<<"_deleted">>, true}|DocProps]}
-                                  end, Docs),
-                {Docs1, Options}
+    {FinalDocs, FinalOptions} = case Empty of
+        true ->
+            Docs1 = lists:map(fun(Doc)->
+                        {[{<<"_id">>, couchbeam_doc:get_id(Doc)},
+                          {<<"_rev">>, couchbeam_doc:get_rev(Doc)},
+                          {<<"_deleted">>, true}]}
+                              end, Docs),
+             {Docs1, proplists:delete("all_or_nothing", Options)};
+        _ ->
+            Docs1 = lists:map(fun({DocProps})->
+                        {[{<<"_deleted">>, true}|DocProps]}
+                end, Docs),
+            {Docs1, Options}
     end,
+
     save_docs(Db, FinalDocs, FinalOptions).
 
 %% @doc save a list of documents
